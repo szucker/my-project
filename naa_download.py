@@ -27,8 +27,11 @@ import sys
 import time
 from pathlib import Path
 
-import img2pdf
 import requests
+try:
+    import img2pdf  # preferred: lossless JPEG-to-PDF
+except ImportError:  # e.g. on iPhone Python apps; fall back to Pillow
+    img2pdf = None
 from PIL import Image
 
 IMAGE_URL = "https://recordsearch.naa.gov.au/SearchNRetrieve/NAAMedia/ShowImage.aspx?B={barcode}&S={page}&T=P"
@@ -134,7 +137,12 @@ def process(session, barcode, pages=None, check_only=False):
         return barcode, len(saved), failed
 
     pdf_path = Path(f"{barcode}.pdf")
-    pdf_path.write_bytes(img2pdf.convert([str(p) for p in sorted(saved)]))
+    files = sorted(saved)
+    if img2pdf:
+        pdf_path.write_bytes(img2pdf.convert([str(p) for p in files]))
+    else:
+        imgs = [Image.open(p).convert("RGB") for p in files]
+        imgs[0].save(pdf_path, "PDF", save_all=True, append_images=imgs[1:], resolution=200)
     print(f"    wrote {pdf_path} ({len(saved)} pages)")
     return barcode, len(saved), failed
 
