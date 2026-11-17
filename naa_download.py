@@ -6,6 +6,7 @@ Usage:
     python naa_download.py 3445411 1339402          # one or more item barcodes
     python naa_download.py --check 3445411          # test page 1 only, download nothing else
     python naa_download.py --pages 42 3445411       # set the page count yourself
+    python naa_download.py --pdf-only 3445411       # offline: build the PDF from images already in 3445411/
 
 Output, for each barcode:
     {barcode}/{barcode}_{page:03d}.jpg   page images (already-saved pages are skipped, so you can resume)
@@ -136,23 +137,38 @@ def process(session, barcode, pages=None, check_only=False):
         print(f"    Check OK: page 1 is an image ({saved[0]})")
         return barcode, len(saved), failed
 
+    make_pdf(barcode, saved)
+    return barcode, len(saved), failed
+
+
+def make_pdf(barcode, paths):
     pdf_path = Path(f"{barcode}.pdf")
-    files = sorted(saved)
+    files = sorted(paths)
     if img2pdf:
         pdf_path.write_bytes(img2pdf.convert([str(p) for p in files]))
     else:
         imgs = [Image.open(p).convert("RGB") for p in files]
         imgs[0].save(pdf_path, "PDF", save_all=True, append_images=imgs[1:], resolution=200)
-    print(f"    wrote {pdf_path} ({len(saved)} pages)")
-    return barcode, len(saved), failed
+    print(f"    wrote {pdf_path} ({len(files)} pages)")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("barcodes", nargs="+")
     ap.add_argument("--pages", type=int, help="page count, if you already know it (applies to every barcode given)")
+    ap.add_argument("--pdf-only", action="store_true",
+                    help="don't download; just combine images already in each barcode folder into a PDF")
     ap.add_argument("--check", action="store_true", help="only fetch page 1 of each barcode to check the URL works")
     args = ap.parse_args()
+
+    if args.pdf_only:
+        for bc in args.barcodes:
+            files = sorted(Path(bc.strip()).glob("*.jpg"))
+            if not files:
+                print(f"{bc}: no .jpg files found in folder {bc}/")
+                continue
+            make_pdf(bc.strip(), files)
+        return 0
 
     session = requests.Session()
     results = []
