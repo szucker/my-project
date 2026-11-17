@@ -6,6 +6,7 @@ Usage:
     python naa_download.py 3445411 1339402          # one or more item barcodes
     python naa_download.py --check 3445411          # test page 1 only, download nothing else
     python naa_download.py --pages 42 3445411       # set the page count yourself
+    python naa_download.py 217144:138 273513:250    # barcode:pages (N= in the gallery viewer URL)
     python naa_download.py --pdf-only 3445411       # offline: build the PDF from images already in 3445411/
 
 Output, for each barcode:
@@ -162,7 +163,7 @@ def main():
     args = ap.parse_args()
 
     if args.pdf_only:
-        for bc in args.barcodes:
+        for bc in (b.partition(":")[0] for b in args.barcodes):
             files = sorted(Path(bc.strip()).glob("*.jpg"))
             if not files:
                 print(f"{bc}: no .jpg files found in folder {bc}/")
@@ -176,7 +177,8 @@ def main():
         if i:
             pause()
         try:
-            results.append(process(session, bc.strip(), args.pages, args.check))
+            code, _, n = bc.strip().partition(":")
+            results.append(process(session, code, int(n) if n else args.pages, args.check))
         except Blocked as e:
             print(f"    BLOCKED: {e}\nStopping; nothing more will be requested.")
             results.append((bc, None, []))
